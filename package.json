@@ -1,0 +1,17 @@
+{
+  "name": "lite-ai-backend",
+  "version": "1.0.0",
+  "description": "Cloud proxy backend for Lite-AI, a lightweight chatbot for low-end Android devices",
+  "main": "server.js",
+  "scripts": {
+    "start": "node --env-file=.env server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2"
+  }
+}
