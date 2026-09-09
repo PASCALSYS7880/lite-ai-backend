@@ -165,10 +165,11 @@ async function streamFromGemini(contents, res) {
 
       try {
         const parsed = JSON.parse(jsonStr);
-        const text = parsed?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (text) {
+        const text = parsed?.candidates?.[0]?.content?.parts || [];
+        for (const part of parts) {
+        if (part.text) {
           // relay just the text delta to the client, our own simple protocol
-          res.write(`data: ${JSON.stringify({ text })}\n\n`);
+          res.write(`data: ${JSON.stringify({ text: part.text })}\n\n`);
         }
       } catch (e) {
         // ignore malformed/partial JSON fragments, they'll complete on next read
