@@ -72,8 +72,6 @@ app.post("/chat", async (req, res) => {
     await streamFromGemini(contents, res);
   } catch (err) {
     console.error("Chat error:", err);
-    // If headers are already sent (we were mid-stream), end the stream
-    // instead of trying to send a second response.
     if (res.headersSent) {
       res.write(`event: error\ndata: ${JSON.stringify({ error: "upstream_failure" })}\n\n`);
       res.end();
@@ -93,7 +91,6 @@ function validateFile(file) {
   if (!allowed.includes(file.mimeType)) {
     return { error: `unsupported file type: ${file.mimeType}` };
   }
-  // base64 length -> approx decoded byte size
   const approxBytes = (file.data.length * 3) / 4;
   if (approxBytes > MAX_ATTACHMENT_BYTES) {
     return { error: `file too large (max ${MAX_ATTACHMENT_BYTES / 1024 / 1024}MB)` };
@@ -115,7 +112,7 @@ function buildGeminiContents(history, message, file) {
     parts.push({
       inlineData: {
         mimeType: file.mimeType,
-        data: file.data, // already base64, no prefix
+        data: file.data,
       },
     });
   }
@@ -153,9 +150,8 @@ async function streamFromGemini(contents, res) {
 
     buffer += decoder.decode(value, { stream: true });
 
-    // Gemini's SSE stream sends "data: {...}\n\n" blocks
     const lines = buffer.split("\n\n");
-    buffer = lines.pop(); // keep any incomplete trailing chunk
+    buffer = lines.pop();
 
     for (const line of lines) {
       const trimmed = line.trim();
@@ -165,14 +161,14 @@ async function streamFromGemini(contents, res) {
 
       try {
         const parsed = JSON.parse(jsonStr);
-        const text = parsed?.candidates?.[0]?.content?.parts || [];
+        const parts = parsed?.candidates?.[0]?.content?.parts || [];
         for (const part of parts) {
-        if (part.text) {
-          // relay just the text delta to the client, our own simple protocol
-          res.write(`data: ${JSON.stringify({ text: part.text })}\n\n`);
+          if (part.text) {
+            res.write(`data: ${JSON.stringify({ text: part.text })}\n\n`);
+          }
         }
       } catch (e) {
-        // ignore malformed/partial JSON fragments, they'll complete on next read
+        // ignore malformed/partial JSON fragments
       }
     }
   }
