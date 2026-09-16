@@ -121,7 +121,8 @@ function buildGeminiContents(history, message, file) {
   return contents;
 }
 
-async function streamFromGemini(contents, res) {
+async function streamFromGemini(contents, res, attempt = 1) {
+  const MAX_ATTEMPTS = 3;
   const url =
     `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:streamGenerateContent` +
     `?alt=sse&key=${GEMINI_API_KEY}`;
@@ -134,7 +135,14 @@ async function streamFromGemini(contents, res) {
 
   if (!upstream.ok || !upstream.body) {
     const errText = await upstream.text().catch(() => "");
-    console.error("Gemini upstream error:", upstream.status, errText);
+    console.error(`Gemini upstream error (attempt ${attempt}):`, upstream.status, errText);
+
+    if (upstream.status === 503 && attempt < MAX_ATTEMPTS) {
+      const delayMs = attempt * 1500;
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      return streamFromGemini(contents, res, attempt + 1);
+    }
+
     res.write(`event: error\ndata: ${JSON.stringify({ error: "model_unavailable" })}\n\n`);
     res.end();
     return;
@@ -168,13 +176,14 @@ async function streamFromGemini(contents, res) {
           }
         }
       } catch (e) {
-        // ignore malformed/partial JSON fragments
+        // ignore malformed/partial JSON fragments, they'll complete on next read
       }
     }
   }
 
   res.write("event: done\ndata: {}\n\n");
   res.end();
+}
 }
 
 app.listen(PORT, () => {
